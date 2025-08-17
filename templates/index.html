@@ -1,0 +1,25 @@
+<!-- index.html -->
+{% extends "base.html" %}
+{% block title %}Daftar Aplikasi{% endblock %}
+{% block content %}
+<h3>Daftar Aplikasi</h3>
+
+{% if apps.is_empty() %}
+  <div class="alert alert-info">Belum ada aplikasi. Silakan <a href="/upload">upload</a> ZIP.</div>
+{% else %}
+  <ul class="list-group">
+  {% for a in apps %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <a href="/apps/{{ a.id }}"><strong>{{ a.nama_aplikasi }}</strong></a>
+        <div class="text-muted small">ID: {{ a.id }} • {{ a.created_at }}</div>
+      </div>
+      <div class="btn-group">
+        <a class="btn btn-sm btn-outline-primary" href="/apps/{{ a.id }}/summary">Summary</a>
+        <a class="btn btn-sm btn-outline-secondary" href="/apps/{{ a.id }}/summary/force">Summary Ulang</a>
+      </div>
+    </li>
+  {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

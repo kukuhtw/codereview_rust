@@ -1,0 +1,19 @@
+<!-- upload.html -->
+{% extends "base.html" %}
+{% block title %}Upload Zip{% endblock %}
+{% block content %}
+<h3 class="mb-3">Upload Aplikasi (ZIP)</h3>
+<form action="/upload" method="post" enctype="multipart/form-data" class="row g-3">
+  <div class="col-md-4">
+    <label class="form-label">Nama Aplikasi</label>
+    <input class="form-control" type="text" name="app_name" required>
+  </div>
+  <div class="col-md-6">
+    <label class="form-label">File ZIP</label>
+    <input class="form-control" type="file" name="file" accept=".zip" required>
+  </div>
+  <div class="col-12">
+    <button class="btn btn-primary">Upload</button>
+  </div>
+</form>
+{% endblock %}

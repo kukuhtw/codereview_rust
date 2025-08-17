@@ -1,0 +1,52 @@
+<!-- detail.html -->
+{% extends "base.html" %}
+{% block title %}Detail Aplikasi{% endblock %}
+{% block content %}
+<h3>Detail Aplikasi: {{ app.nama_aplikasi }}</h3>
+
+<div class="d-flex gap-2 mb-3">
+  <a href="/apps">← Kembali</a>
+  <a class="btn btn-sm btn-primary" href="/apps/{{ app.id }}/analysis">Lihat Semua Analisa</a>
+</div>
+
+{% if files.is_empty() %}
+  <div class="alert alert-warning">Tidak ada file terdata.</div>
+{% else %}
+  <table class="table table-sm table-striped align-middle">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Folder</th>
+        <th class="text-center">Lines</th>
+        <th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for f in files %}
+      <tr>
+        <td>{{ f.nama_file }}</td>
+
+        <td>
+          {% match f.nama_folder %}
+            {% when Some with (v) %}{{ v }}
+            {% when None %}-{% endmatch %}
+        </td>
+
+        <td class="text-center">
+          {% match f.line_count %}
+            {% when Some with (n) %}{{ n }}
+            {% when None %}-{% endmatch %}
+        </td>
+
+        <td>
+          <a class="btn btn-sm btn-outline-primary" href="/analyze/{{ f.id }}/fungsi">Analisa Fungsi</a>
+          <a class="btn btn-sm btn-outline-dark" href="/analyze/{{ f.id }}/relasi_file">Relasi File</a>
+          <a class="btn btn-sm btn-outline-success" href="/analyze/{{ f.id }}/relasi_db">Relasi DB</a>
+          <a class="btn btn-sm btn-outline-secondary" href="/analyze/{{ f.id }}/fungsi/force">Analisa Ulang</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}
