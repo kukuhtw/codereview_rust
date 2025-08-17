@@ -207,10 +207,44 @@ Contributions & ideas are welcome!
 * Upload limits and file filters are configurable.
 
 ---
+# syntax=docker/dockerfile:1
 
-## 📸 Screenshots
+# --- Build stage ---
+FROM rust:1.80 as builder
+WORKDIR /app
 
-> Add UI screenshots here (e.g., `docs/explorer.png`, `docs/report.png`).
+# Cache dependencies first
+COPY Cargo.toml Cargo.lock ./
+# If you have a workspace, also copy member Cargo.toml files
+# COPY src ./src  # we'll copy full repo anyway below
+
+# Copy the full repo
+COPY . .
+
+# Build release binary
+RUN cargo build --release
+
+# --- Runtime stage ---
+FROM debian:bookworm-slim
+WORKDIR /app
+
+# Create non-root user
+RUN useradd -m -u 10001 appuser && \
+    apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Copy binary + runtime assets
+COPY --from=builder /app/target/release/codereview_rust /usr/local/bin/app
+COPY --from=builder /app/templates ./templates
+COPY --from=builder /app/public ./public
+
+# App env
+ENV RUST_LOG=info \
+    PORT=8080
+
+EXPOSE 8080
+USER appuser
+CMD ["/usr/local/bin/app"]
+
 
 ---
 
