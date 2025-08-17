@@ -1,9 +1,11 @@
 
+[![CI](https://github.com/kukuhtw/codereview_rust/actions/workflows/ci.yml/badge.svg)](https://github.com/kukuhtw/codereview_rust/actions/workflows/ci.yml)
+
 # codereview\_rust
 
 **codereview\_rust** is an AI-powered code reviewer built with **Rust** that leverages **GPT-5** to read, map, and explain entire codebases—without manually tracing thousands of lines.
 
-**Workflow:** Upload ZIP → Extract → Click **Review** → Get a structured report of your codebase (files, relationships, database usage, and call flows).
+**Workflow:** Upload ZIP → Extract → Click **Review** → Get a structured report (files, relationships, database usage, and call flows).
 
 > Perfect for onboarding, legacy audits, large refactors, and knowledge transfer.
 
@@ -16,33 +18,33 @@ Watch the quick demo on YouTube:
 
 ---
 
-## ✨ Key Features
+## ✨ Features
 
 * **ZIP Upload**
 
   * Upload a single `.zip` with your entire source (Rust, PHP, JS/TS, Python, Go, Java, SQL, etc.).
-  * Automatic extract + indexing (path, extension, size, hash, content snippet).
+  * Auto-extraction + indexing (path, extension, size, hash, safe content snippet).
 
 * **Codebase Explorer**
 
   * Browse folder/file structure like a file explorer.
-  * Safe (read-only) previews per file.
+  * Read-only file previews.
 
 * **AI Review (GPT-5)**
 
-  * One-click **Review** analyzes the project:
+  * One-click **Review**:
 
-    * Explains each file’s role in the app.
-    * Extracts **classes, functions, and methods**.
+    * Explains each file’s role.
+    * Extracts **classes, functions, methods**.
     * Builds a **dependency graph** across files.
-    * Detects **databases, tables, and SQL queries** in use.
+    * Detects **databases, tables, SQL queries**.
 
 * **Structured Report**
 
   * Per-file explanations.
   * Cross-file relationships and call flows.
-  * Database schema summary (tables, relationships, frequently used queries).
-  * Natural language output—easy for the whole team.
+  * Database schema summary (tables, relationships, frequent queries).
+  * Natural language output for the whole team.
 
 * **Rust-first performance & safety**
 
@@ -51,13 +53,13 @@ Watch the quick demo on YouTube:
 
 ---
 
-## 🧩 How It Works (Pipeline)
+## 🧩 How It Works
 
-1. **Indexing:** Extract ZIP → walk files → store metadata + safe preview snippets.
-2. **File Summaries:** GPT-5 produces per-file roles and public APIs (classes/functions).
+1. **Indexing:** Extract ZIP → walk files → store metadata & safe preview snippets.
+2. **File Summaries:** GPT-5 produces per-file roles and public APIs.
 3. **Relation Mining:** Detect imports, cross-file calls, references → dependency graph.
-4. **DB Insight:** Identify SQL/ORM usage → list tables, columns, relations, and key queries.
-5. **Global Report:** Merge summaries into a cohesive report (+ optional refactor hints).
+4. **DB Insight:** Identify SQL/ORM usage → list tables, columns, relations, key queries.
+5. **Global Report:** Merge summaries into a cohesive, human-readable report (+ optional refactor hints).
 
 ---
 
@@ -67,13 +69,13 @@ Watch the quick demo on YouTube:
 * **Askama**: Server-rendered HTML templates
 * **SQLx (MySQL)**: Persistence for projects, files, and analysis artifacts
 * **dotenv**: Configuration
-* **OpenAI (GPT-5)**: Semantic analysis and summarization
+* **OpenAI (GPT-5)**: Semantic analysis & summarization
 
   > You can swap the LLM provider if needed.
 
 ---
 
-## ⚙️ Getting Started
+## ⚙️ Quickstart
 
 ### Prerequisites
 
@@ -88,7 +90,7 @@ git clone https://github.com/kukuhtw/codereview_rust.git
 cd codereview_rust
 ```
 
-### 2) Create `.env`
+### 2) Configure `.env`
 
 ```env
 # Database
@@ -105,9 +107,9 @@ PORT=8080
 MAX_UPLOAD_MB=200
 ```
 
-### 3) Database (example schema)
+### 3) Initialize Database (example schema)
 
-> Adjust to your migrations if you have them.
+> Adjust to your migrations if you have them (also provided under `docker/sql/001_init.sql`).
 
 ```sql
 CREATE TABLE apps (
@@ -152,6 +154,26 @@ Open: `http://localhost:8080`
 
 ---
 
+## 🐳 Run with Docker
+
+This repo includes a `Dockerfile` and `docker-compose.yml`.
+
+```bash
+docker compose up -d --build
+# App: http://localhost:8080
+```
+
+Environment variables:
+
+* `MYSQL_ROOT_PASSWORD` (default: `password`)
+* `MYSQL_DATABASE` (default: `codereview_rust`)
+* `OPENAI_API_KEY` (required for GPT-5 review)
+* `RUST_LOG`, `PORT` (optional)
+
+> The database schema is auto-loaded from `docker/sql/001_init.sql` on first run.
+
+---
+
 ## 🔌 API Overview
 
 > Route names may differ if you customize routing; these are typical defaults.
@@ -185,20 +207,38 @@ curl http://localhost:8080/apps/APP_ID/analysis
 
 ---
 
-## 🐳 Run with Docker
+## 🧰 Project Structure (example)
 
-With the provided `Dockerfile` and `docker-compose.yml`:
-
-```bash
-docker compose up -d --build
-# App: http://localhost:8080
+```
+src/
+  handlers/     # Warp route handlers
+  services/     # indexing + analysis pipeline
+  openai/       # GPT-5 client + prompts
+  db/           # SQLx pool + repositories
+  models/       # entities & DTOs
+  main.rs
+templates/      # Askama HTML templates
+public/         # static assets
+docker/
+  sql/
+    001_init.sql
+.github/
+  workflows/
+    ci.yml
 ```
 
-Configure via env vars:
+---
 
-* `MYSQL_ROOT_PASSWORD` (default: `password`)
-* `MYSQL_DATABASE` (default: `codereview_rust`)
-* `OPENAI_API_KEY` (required for GPT-5 review)
+## ✅ Continuous Integration
+
+This repository ships with **GitHub Actions** that:
+
+* spin up MySQL,
+* initialize the schema from `docker/sql/001_init.sql`,
+* run `cargo fmt`, `clippy`, `build`, and `test`.
+
+Badge is displayed at the top of this README.
+If your tests call the LLM, add `OPENAI_API_KEY` in **Settings → Secrets and variables → Actions**.
 
 ---
 
@@ -218,24 +258,14 @@ Contributions & ideas are welcome!
 ## 🔒 Security & Privacy
 
 * **No code execution**: static/semantic analysis only.
-* Avoid uploading highly sensitive code to public LLMs. Consider self-hosted LLMs or masking secrets (API keys/credentials).
+* Avoid uploading highly sensitive code to public LLMs (consider self-hosted LLMs or masking secrets).
 * Upload limits and file filters are configurable.
 
 ---
 
-## 🧰 Project Structure (example)
+## 📸 Screenshots
 
-```
-src/
-  handlers/     # Warp route handlers
-  services/     # indexing + analysis pipeline
-  openai/       # GPT-5 client + prompts
-  db/           # SQLx pool + repositories
-  models/       # entities & DTOs
-  main.rs
-templates/      # Askama HTML templates
-public/         # static assets
-```
+> Add UI screenshots (e.g., `docs/explorer.png`, `docs/report.png`) to showcase the explorer and sample reports.
 
 ---
 
@@ -263,97 +293,3 @@ See `LICENSE`.
 🔗 **LinkedIn:** [https://id.linkedin.com/in/kukuhtw](https://id.linkedin.com/in/kukuhtw)
 
 ---
-
-### 📁 Place these files in your repo
-
-**`Dockerfile`**
-
-```dockerfile
-# syntax=docker/dockerfile:1
-
-# --- Build stage ---
-FROM rust:1.80 as builder
-WORKDIR /app
-
-# Cache dependencies first (optional optimization)
-COPY Cargo.toml Cargo.lock ./
-# COPY src ./src  # optional if you want to prebuild deps only
-
-# Copy the full repo and build
-COPY . .
-RUN cargo build --release
-
-# --- Runtime stage ---
-FROM debian:bookworm-slim
-WORKDIR /app
-
-RUN useradd -m -u 10001 appuser \
- && apt-get update \
- && apt-get install -y ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-
-# Copy binary + runtime assets
-COPY --from=builder /app/target/release/codereview_rust /usr/local/bin/app
-COPY --from=builder /app/templates ./templates
-COPY --from=builder /app/public ./public
-
-ENV RUST_LOG=info \
-    PORT=8080
-
-EXPOSE 8080
-USER appuser
-CMD ["/usr/local/bin/app"]
-```
-
-**`docker-compose.yml`**
-
-```yaml
-services:
-  db:
-    image: mysql:8
-    container_name: cr_db
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-codereview_rust}
-      TZ: Asia/Jakarta
-    ports:
-      - "3306:3306"   # optional: expose for local access
-    volumes:
-      - db-data:/var/lib/mysql
-      - ./docker/sql:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$${MYSQL_ROOT_PASSWORD} --silent"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  app:
-    build: .
-    container_name: cr_app
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-password}@db:3306/${MYSQL_DATABASE:-codereview_rust}?ssl-mode=DISABLED
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      RUST_LOG: ${RUST_LOG:-info}
-      PORT: ${PORT:-8080}
-      TZ: Asia/Jakarta
-    ports:
-      - "8080:8080"
-
-volumes:
-  db-data:
-```
-
-**Optional `.dockerignore`**
-
-```dockerignore
-target
-.git
-.gitignore
-.env
-**/*.zip
-**/node_modules
-docker/sql/*.tmp
-```
