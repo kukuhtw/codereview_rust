@@ -1,5 +1,5 @@
 
-[![CI](https://github.com/kukuhtw/codereview_rust/actions/workflows/ci.yml/badge.svg)](https://github.com/kukuhtw/codereview_rust/actions/workflows/ci.yml)
+[![CI](https://github.com/kukuhtw/codereview_rust/actions/workflows/ci.yml)
 
 # codereview\_rust
 
