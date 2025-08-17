@@ -1,6 +1,3 @@
-Siap. Ini versi **README.md** yang sudah dirapikan (English), plus penempatan yang benar untuk **Dockerfile** dan **docker-compose.yml** sebagai file terpisah.
-
----
 
 # codereview\_rust
 
