@@ -254,13 +254,6 @@ public/         # static assets
 MIT (or update to your company’s preferred license).
 See `LICENSE`.
 
----
-
-## 👤 Author
-
-**Kukuh Tripamungkas Wicaksono (Kukuh TW)**
-📧 **[kukuhtw@gmail.com](mailto:kukuhtw@gmail.com)** · 📱 **[https://wa.me/628129893706](https://wa.me/628129893706)**
-🔗 **LinkedIn:** [https://id.linkedin.com/in/kukuhtw](https://id.linkedin.com/in/kukuhtw)
 
 ---
 
@@ -437,3 +430,12 @@ jobs:
 
 * The workflow expects your schema at `docker/sql/001_init.sql` (already provided in our earlier steps).
 * If any tests call the LLM, add `OPENAI_API_KEY` in **Settings → Secrets and variables → Actions**.
+
+ ---
+
+## 👤 Author
+
+**Kukuh Tripamungkas Wicaksono (Kukuh TW)**
+📧 **[kukuhtw@gmail.com](mailto:kukuhtw@gmail.com)** · 📱 **[https://wa.me/628129893706](https://wa.me/628129893706)**
+🔗 **LinkedIn:** [https://id.linkedin.com/in/kukuhtw](https://id.linkedin.com/in/kukuhtw)
+
