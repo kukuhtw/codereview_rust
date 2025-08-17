@@ -1,4 +1,6 @@
+Siap. Ini versi **README.md** yang sudah dirapikan (English), plus penempatan yang benar untuk **Dockerfile** dan **docker-compose.yml** sebagai file terpisah.
 
+---
 
 # codereview\_rust
 
@@ -21,7 +23,7 @@ Watch the quick demo on YouTube:
 
 * **ZIP Upload**
 
-  * Upload a single `.zip` containing your entire source (Rust, PHP, JS/TS, Python, Go, Java, SQL, etc.).
+  * Upload a single `.zip` with your entire source (Rust, PHP, JS/TS, Python, Go, Java, SQL, etc.).
   * Automatic extract + indexing (path, extension, size, hash, content snippet).
 
 * **Codebase Explorer**
@@ -33,7 +35,7 @@ Watch the quick demo on YouTube:
 
   * One-click **Review** analyzes the project:
 
-    * Explains each file’s role in the application.
+    * Explains each file’s role in the app.
     * Extracts **classes, functions, and methods**.
     * Builds a **dependency graph** across files.
     * Detects **databases, tables, and SQL queries** in use.
@@ -47,7 +49,7 @@ Watch the quick demo on YouTube:
 
 * **Rust-first performance & safety**
 
-  * Asynchronous server, efficient I/O, memory safety by design.
+  * Async server, efficient I/O, memory safety by design.
   * Large files handled via chunking & streaming.
 
 ---
@@ -186,6 +188,23 @@ curl http://localhost:8080/apps/APP_ID/analysis
 
 ---
 
+## 🐳 Run with Docker
+
+With the provided `Dockerfile` and `docker-compose.yml`:
+
+```bash
+docker compose up -d --build
+# App: http://localhost:8080
+```
+
+Configure via env vars:
+
+* `MYSQL_ROOT_PASSWORD` (default: `password`)
+* `MYSQL_DATABASE` (default: `codereview_rust`)
+* `OPENAI_API_KEY` (required for GPT-5 review)
+
+---
+
 ## 🗺 Roadmap
 
 * [ ] Git repository import (HTTPS/SSH)
@@ -202,49 +221,8 @@ Contributions & ideas are welcome!
 ## 🔒 Security & Privacy
 
 * **No code execution**: static/semantic analysis only.
-* Avoid uploading highly sensitive code to public LLMs.
-  Consider self-hosted LLMs or masking secrets (API keys/credentials).
+* Avoid uploading highly sensitive code to public LLMs. Consider self-hosted LLMs or masking secrets (API keys/credentials).
 * Upload limits and file filters are configurable.
-
----
-# syntax=docker/dockerfile:1
-
-# --- Build stage ---
-FROM rust:1.80 as builder
-WORKDIR /app
-
-# Cache dependencies first
-COPY Cargo.toml Cargo.lock ./
-# If you have a workspace, also copy member Cargo.toml files
-# COPY src ./src  # we'll copy full repo anyway below
-
-# Copy the full repo
-COPY . .
-
-# Build release binary
-RUN cargo build --release
-
-# --- Runtime stage ---
-FROM debian:bookworm-slim
-WORKDIR /app
-
-# Create non-root user
-RUN useradd -m -u 10001 appuser && \
-    apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-
-# Copy binary + runtime assets
-COPY --from=builder /app/target/release/codereview_rust /usr/local/bin/app
-COPY --from=builder /app/templates ./templates
-COPY --from=builder /app/public ./public
-
-# App env
-ENV RUST_LOG=info \
-    PORT=8080
-
-EXPOSE 8080
-USER appuser
-CMD ["/usr/local/bin/app"]
-
 
 ---
 
@@ -287,3 +265,98 @@ See `LICENSE`.
 📧 **[kukuhtw@gmail.com](mailto:kukuhtw@gmail.com)** · 📱 **[https://wa.me/628129893706](https://wa.me/628129893706)**
 🔗 **LinkedIn:** [https://id.linkedin.com/in/kukuhtw](https://id.linkedin.com/in/kukuhtw)
 
+---
+
+### 📁 Place these files in your repo
+
+**`Dockerfile`**
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+# --- Build stage ---
+FROM rust:1.80 as builder
+WORKDIR /app
+
+# Cache dependencies first (optional optimization)
+COPY Cargo.toml Cargo.lock ./
+# COPY src ./src  # optional if you want to prebuild deps only
+
+# Copy the full repo and build
+COPY . .
+RUN cargo build --release
+
+# --- Runtime stage ---
+FROM debian:bookworm-slim
+WORKDIR /app
+
+RUN useradd -m -u 10001 appuser \
+ && apt-get update \
+ && apt-get install -y ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+# Copy binary + runtime assets
+COPY --from=builder /app/target/release/codereview_rust /usr/local/bin/app
+COPY --from=builder /app/templates ./templates
+COPY --from=builder /app/public ./public
+
+ENV RUST_LOG=info \
+    PORT=8080
+
+EXPOSE 8080
+USER appuser
+CMD ["/usr/local/bin/app"]
+```
+
+**`docker-compose.yml`**
+
+```yaml
+services:
+  db:
+    image: mysql:8
+    container_name: cr_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-codereview_rust}
+      TZ: Asia/Jakarta
+    ports:
+      - "3306:3306"   # optional: expose for local access
+    volumes:
+      - db-data:/var/lib/mysql
+      - ./docker/sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    container_name: cr_app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-password}@db:3306/${MYSQL_DATABASE:-codereview_rust}?ssl-mode=DISABLED
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RUST_LOG: ${RUST_LOG:-info}
+      PORT: ${PORT:-8080}
+      TZ: Asia/Jakarta
+    ports:
+      - "8080:8080"
+
+volumes:
+  db-data:
+```
+
+**Optional `.dockerignore`**
+
+```dockerignore
+target
+.git
+.gitignore
+.env
+**/*.zip
+**/node_modules
+docker/sql/*.tmp
+```
