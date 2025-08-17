@@ -1,6 +1,4 @@
 
-[![CI](https://github.com/kukuhtw/codereview_rust/actions/workflows/ci.yml)
-
 # codereview\_rust
 
 **codereview\_rust** is an AI-powered code reviewer built with **Rust** that leverages **GPT-5** to read, map, and explain entire codebases—without manually tracing thousands of lines.
