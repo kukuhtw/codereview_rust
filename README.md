@@ -15,10 +15,10 @@
 
 Tonton demo di YouTube:
 
-- ▶️ **Demo 1** – walkthrough upload ZIP, analisis, dan visualisasi  
+- ▶️ **Demo 1** – walkthrough upload ZIP, analisis
   [https://www.youtube.com/watch?v=_y08n-yFXY8](https://www.youtube.com/watch?v=_y08n-yFXY8)
 
-- ▶️ **Demo 2** – versi singkat  
+- ▶️ **Demo 2** – demo dengan graph dan visualisasi
   [https://youtu.be/QiKAjsS4ifA](https://youtu.be/QiKAjsS4ifA)
 
 
