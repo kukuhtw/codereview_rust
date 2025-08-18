@@ -1,5 +1,4 @@
 // src/main.rs
-
 /*
 =============================================================================
 Project : AI CodeReview Rust
@@ -8,7 +7,6 @@ Email : kukuhtw@gmail.com
 WhatsApp : https://wa.me/628129893706
 LinkedIn : https://id.linkedin.com/in/kukuhtw
 =============================================================================/
-
 */
 
 mod db;
@@ -93,10 +91,32 @@ async fn main() {
     // src/main.rs (di dalam main())
 
 // GET /apps/:id/analysis   ← halaman semua analisa
-let analysis_all = warp::path!("apps" / i32 / "analysis")
+// GET /apps/:id/analysis
+    let analysis_all = warp::path!("apps" / i32 / "analysis")
+        .and(warp::get())
+        .and(with_db(pool.clone()))
+        .and_then(handlers::app_analysis_all);
+
+  // GET /api/analysis/:file_id/:kind
+    
+
+    let api_analysis = warp::path!("api" / "analysis" / i32 / String)
     .and(warp::get())
     .and(with_db(pool.clone()))
-    .and_then(handlers::app_analysis_all);
+    .and_then(handlers::api_get_analysis);
+
+    // ==== BARU: generate graph dan view graph ====
+    // POST /files/:id/generate_graph
+    let generate_graph = warp::path!("files" / i32 / "generate_graph")
+        .and(warp::post())
+        .and(with_db(pool.clone()))
+        .and_then(handlers::generate_graph);
+
+    // GET /files/:id/graph
+    let view_graph = warp::path!("files" / i32 / "graph")
+        .and(warp::get())
+        .and(with_db(pool.clone()))
+        .and_then(handlers::view_graph);
 
    
 
@@ -111,6 +131,9 @@ let analysis_all = warp::path!("apps" / i32 / "analysis")
         .or(app_detail)
         .or(analysis_all)     // ⟵ masukkan route baru di sini
         .or(analyze)
+        .or(api_analysis)
+        .or(generate_graph)
+        .or(view_graph)
         .or(analyze_force)
         .or(summary)
         .or(summary_force)
@@ -136,4 +159,13 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     eprintln!("Rejection: {:?}", err);
     let msg = "Terjadi kesalahan di server (lihat log).";
     Ok(warp::reply::with_status(msg, StatusCode::INTERNAL_SERVER_ERROR))
+}
+
+async fn api_recover(err: Rejection) -> Result<impl Reply, Infallible> {
+    eprintln!("API Rejection: {:?}", err);
+    let body = serde_json::json!({
+        "error": "rejected",
+        "message": "Terjadi kesalahan di server (api)."
+    });
+    Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::INTERNAL_SERVER_ERROR))
 }

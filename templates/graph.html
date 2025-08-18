@@ -1,0 +1,221 @@
+<!-- graph.html -->
+{% extends "base.html" %}
+{% block title %}Graph: {{ file_name }}{% endblock %}
+{% block content %}
+
+<style>
+#zoomToolbar{position:absolute;top:10px;right:10px;z-index:10;display:flex;gap:6px}
+#zoomToolbar button{border:1px solid #ddd;background:#fff;border-radius:6px;padding:6px 8px;box-shadow:0 1px 3px rgba(0,0,0,.1);cursor:pointer}
+</style>
+
+<div class="container py-3">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <a href="javascript:history.back()">&larr; Kembali</a>
+      <h4 class="mb-0">Graph — {{ file_name }}</h4>
+      <div class="text-muted small">Aplikasi: {{ app.nama_aplikasi }}</div>
+    </div>
+  </div>
+
+  <!-- Wrapper relatif agar toolbar bisa “menempel” -->
+  <div id="networkWrap" style="position:relative;">
+    <div id="mynetwork" style="width:100%;height:600px;border:1px solid #ddd;border-radius:.5rem;"></div>
+
+    <!-- Toolbar zoom -->
+    <div id="zoomToolbar">
+      <button id="btnZoomIn">+</button>
+      <button id="btnZoomOut">−</button>
+      <button id="btnFit">Fit</button>
+      <button id="btnReset">Reset</button>
+    </div>
+  </div>
+</div>
+
+<!-- Urutan penting: lib → hook constructor → kode graph -->
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script>
+// Hook harus setelah vis-network dimuat dan sebelum network dibuat
+(function(){
+  if (!window.vis || !vis.Network) return;
+  const Original = vis.Network;
+  vis.Network = new Proxy(Original, {
+    construct(target, args) {
+      const instance = new target(...args);
+      window.network = instance; // simpan ke global utk tombol
+      return instance;
+    }
+  });
+})();
+
+// Helper zoom
+function clampScale(s, min=0.1, max=3){ return Math.min(max, Math.max(min, s)); }
+function zoomBy(f){
+  if(!window.network) return;
+  const s = window.network.getScale();
+  const pos = window.network.getViewPosition();
+  window.network.moveTo({ scale: clampScale(s * f), position: pos, animation: true });
+}
+document.getElementById('btnZoomIn').onclick  = () => zoomBy(1.2);
+document.getElementById('btnZoomOut').onclick = () => zoomBy(1/1.2);
+document.getElementById('btnFit').onclick     = () => window.network && window.network.fit({ animation:true, padding:30 });
+document.getElementById('btnReset').onclick   = () => window.network && window.network.moveTo({ scale:1, position:{x:0,y:0}, animation:true });
+document.addEventListener('keydown', e => {
+  if (e.key === '+' || e.key === '=') zoomBy(1.2);
+  if (e.key === '-' || e.key === '_') zoomBy(1/1.2);
+});
+</script>
+
+<!-- Kode JS dari DB (harus membuat new vis.Network pada #mynetwork) -->
+<script>
+{{ graph_js|safe }}
+</script>
+
+<!-- Rapikan layout: anti-overlap + wrap label -->
+<script>
+(function enhanceGraph(){
+  if (!window.network) return;
+
+  const net    = window.network;
+  const data   = net.body?.data;
+  const nodes  = data?.nodes;
+  const edges  = data?.edges;
+
+  // 1) Bungkus label node supaya tidak kepanjangan
+  const wrap = (s, n=3) => {
+    if (!s || /\n/.test(s)) return s;
+    const parts = String(s).split(/\s+/);
+    if (parts.length <= n) return s;
+    let out = [];
+    for (let i=0;i<parts.length;i+=n) out.push(parts.slice(i,i+n).join(' '));
+    return out.join('\n');
+  };
+  if (nodes?.get) {
+    const upd = [];
+    nodes.forEach(item => {
+      const lbl = wrap(item.label, 3);
+      if (lbl && lbl !== item.label) upd.push({ id: item.id, label: lbl });
+    });
+    if (upd.length) nodes.update(upd);
+  }
+
+  // 2) Opsi keterbacaan
+  net.setOptions({
+    layout: { improvedLayout: true, hierarchical: false },
+    nodes: {
+      shape: 'box',
+      margin: 10,
+      widthConstraint: { maximum: 180 },
+      font: { size: 14, face: 'Arial', multi: 'md' },
+      color: { background: '#e9f2ff', border: '#6ba4ff' }
+    },
+    edges: {
+      smooth: { type: 'dynamic' },
+      width: 1,
+      font: { size: 11, background: 'rgba(255,255,255,.9)' },
+      arrows: { to: { enabled: true, scaleFactor: 1 } }
+    },
+    interaction: { dragNodes: true, dragView: true, zoomView: true }
+  });
+
+ 
+
+  // 4) Sembunyikan label edge secara default → tampil saat hover/seleksi
+  if (edges?.get && edges?.update) {
+    const all = edges.get();               // pastikan tiap edge punya id
+    edges.update(all.map(e => ({
+      id: e.id,
+      hiddenLabel: e.label,                 // simpan label asli
+      label: undefined                      // sembunyikan
+    })));
+
+    net.on('hoverEdge', p => {
+      const e = edges.get(p.edge);
+      if (!e) return;
+      edges.update({ id: p.edge, label: e.hiddenLabel, width: 2 });
+    });
+    net.on('blurEdge', p => {
+      edges.update({ id: p.edge, label: undefined, width: 1 });
+    });
+    net.on('selectEdge', p => {
+      p.edges.forEach(id => {
+        const e = edges.get(id);
+        if (e) edges.update({ id, label: e.hiddenLabel, width: 2 });
+      });
+    });
+    net.on('deselectEdge', p => {
+      p.previousSelection?.edges?.forEach(id => {
+        edges.update({ id, label: undefined, width: 1 });
+      });
+    });
+  }
+
+  // 5) Isolated drag: node lain tetap diam; node yang digeser menetap
+  let dragging = [];
+  net.on('dragStart', params => {
+    dragging = params.nodes || [];
+    if (dragging.length && nodes?.update) {
+      nodes.update(dragging.map(id => ({ id, fixed: { x:false, y:false } })));
+    }
+  });
+  net.on('dragEnd', () => {
+    const ids = dragging; dragging = [];
+    if (!ids.length || !nodes?.update) return;
+    const pos = net.getPositions(ids);
+    nodes.update(ids.map(id => ({
+      id, x: pos[id].x, y: pos[id].y, fixed: { x:true, y:true }
+    })));
+  });
+})();
+</script>
+
+<script>
+(function deOverlapEdges(){
+  if (!window.network) return;
+  const ds = window.network.body?.data?.edges;
+  if (!ds?.get || !ds?.update) return;
+
+  // 1) pastikan semua edge punya id
+  const all = ds.get();
+  const needId = [];
+  all.forEach((e,i)=>{ if (e.id == null) needId.push({ ...e, id: 'e'+i }); });
+  if (needId.length) ds.update(needId);
+
+  // 2) kelompokkan per pasangan node (abaikan arah)
+  const groups = new Map(); // key = min(from,to)+'_'+max(from,to)
+  ds.forEach(e => {
+    const a = String(e.from), b = String(e.to);
+    const key = a < b ? a + '_' + b : b + '_' + a;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e.id);
+  });
+
+  // 3) selang-seling kurva & naikkan roundness bertahap
+  const base = 0.22;      // kurva awal
+  const step = 0.12;      // jarak antar kurva
+  groups.forEach(ids => {
+    ids.forEach((id, idx) => {
+      const dir = (idx % 2 === 0) ? 'curvedCW' : 'curvedCCW';
+      const r   = base + Math.floor(idx/2) * step; // 0.22, 0.34, 0.46, ...
+      ds.update({ id, smooth: { enabled: true, type: dir, roundness: r }});
+    });
+  });
+
+  // 4) tata self-loop supaya tidak menimpa node
+  ds.forEach(e => {
+    if (e.from === e.to) {
+      ds.update({
+        id: e.id,
+        selfReference: { size: 50, angle: Math.PI/4 } // besar & arah loop
+      });
+    }
+  });
+
+  // (opsional) sembunyikan label edge default; tampil saat hover/seleksi
+  window.network.on('hoverEdge', p => {
+    const e = ds.get(p.edge); if (e?.hiddenLabel) ds.update({ id:p.edge, label:e.hiddenLabel, width:2 });
+  });
+  window.network.on('blurEdge',  p => ds.update({ id:p.edge, label:undefined, width:1 }));
+})();
+</script>
+
+{% endblock %}

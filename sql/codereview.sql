@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 16, 2025 at 03:29 PM
+-- Generation Time: Aug 18, 2025 at 07:56 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `codereview`
+-- Database: `codereview2`
 --
 
 -- --------------------------------------------------------
@@ -33,7 +33,7 @@ CREATE TABLE `analysis` (
   `analisa_fungsi` mediumtext DEFAULT NULL,
   `analisa_relasi_file` mediumtext DEFAULT NULL,
   `analisa_relasi_db` mediumtext DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -45,12 +45,8 @@ CREATE TABLE `analysis` (
 CREATE TABLE `applications` (
   `id` bigint(20) NOT NULL,
   `nama_aplikasi` varchar(255) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Dumping data for table `applications`
---
 
 -- --------------------------------------------------------
 
@@ -77,12 +73,12 @@ CREATE TABLE `files` (
   `nama_file` varchar(512) NOT NULL,
   `nama_folder` varchar(1024) DEFAULT NULL,
   `full_path` varchar(2048) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `content_file` text DEFAULT NULL,
+  `json_graph` mediumtext DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
---
--- Dumping data for table `files`
---
+-- --------------------------------------------------------
 
 --
 -- Table structure for table `file_metadata`
@@ -94,7 +90,7 @@ CREATE TABLE `file_metadata` (
   `line_count` int(11) DEFAULT NULL,
   `imports` text DEFAULT NULL,
   `sql_queries` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -106,7 +102,8 @@ CREATE TABLE `file_metadata` (
 --
 ALTER TABLE `analysis`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `uq_analysis_file` (`file_id`);
+  ADD UNIQUE KEY `uq_analysis_file` (`file_id`),
+  ADD KEY `idx_analysis_file_id` (`file_id`);
 
 --
 -- Indexes for table `applications`
@@ -126,7 +123,8 @@ ALTER TABLE `app_summary`
 --
 ALTER TABLE `files`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `app_id` (`app_id`);
+  ADD KEY `app_id` (`app_id`),
+  ADD KEY `idx_files_app_id` (`app_id`);
 
 --
 -- Indexes for table `file_metadata`
@@ -149,7 +147,7 @@ ALTER TABLE `analysis`
 -- AUTO_INCREMENT for table `applications`
 --
 ALTER TABLE `applications`
-  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `app_summary`
@@ -161,7 +159,7 @@ ALTER TABLE `app_summary`
 -- AUTO_INCREMENT for table `files`
 --
 ALTER TABLE `files`
-  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=49;
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=97;
 
 --
 -- AUTO_INCREMENT for table `file_metadata`

@@ -1,4 +1,3 @@
-<!-- detail.html -->
 {% extends "base.html" %}
 {% block title %}Detail Aplikasi{% endblock %}
 {% block content %}
@@ -12,41 +11,160 @@
 {% if files.is_empty() %}
   <div class="alert alert-warning">Tidak ada file terdata.</div>
 {% else %}
+  <div class="alert alert-info">
+    Klik ringkasan untuk melihat konten lengkap di modal. Gunakan tombol “Generate JSON” untuk membuat diagram graph (vis-network) dan “View Graph” untuk melihatnya.
+  </div>
+
   <table class="table table-sm table-striped align-middle">
     <thead>
       <tr>
         <th>File</th>
         <th>Folder</th>
         <th class="text-center">Lines</th>
+        <th style="width:38%">Ringkasan Analisa (50 kata)</th>
         <th>Aksi</th>
       </tr>
     </thead>
     <tbody>
     {% for f in files %}
       <tr>
-        <td>{{ f.nama_file }}</td>
-
+        <td class="fw-semibold">{{ f.nama_file }}</td>
         <td>
           {% match f.nama_folder %}
             {% when Some with (v) %}{{ v }}
             {% when None %}-{% endmatch %}
         </td>
-
         <td class="text-center">
           {% match f.line_count %}
             {% when Some with (n) %}{{ n }}
             {% when None %}-{% endmatch %}
         </td>
-
         <td>
-          <a class="btn btn-sm btn-outline-primary" href="/analyze/{{ f.id }}/fungsi">Analisa Fungsi</a>
-          <a class="btn btn-sm btn-outline-dark" href="/analyze/{{ f.id }}/relasi_file">Relasi File</a>
-          <a class="btn btn-sm btn-outline-success" href="/analyze/{{ f.id }}/relasi_db">Relasi DB</a>
-          <a class="btn btn-sm btn-outline-secondary" href="/analyze/{{ f.id }}/fungsi/force">Analisa Ulang</a>
+          <div class="small">
+            <div>
+              <span class="badge text-bg-primary">Fungsi</span>
+              {% if let Some(txt) = f.fungsi_preview %}
+                <a href="#" class="link-modal ms-1" data-file="{{ f.id }}" data-kind="fungsi">{{ txt }}</a>
+              {% else %}
+                <em>belum dianalisis</em>
+              {% endif %}
+            </div>
+            <div class="mt-1">
+              <span class="badge text-bg-dark">Relasi File</span>
+              {% if let Some(txt) = f.relasi_file_preview %}
+                <a href="#" class="link-modal ms-1" data-file="{{ f.id }}" data-kind="relasi_file">{{ txt }}</a>
+              {% else %}
+                <em>belum dianalisis</em>
+              {% endif %}
+            </div>
+            <div class="mt-1">
+              <span class="badge text-bg-success">Relasi DB</span>
+              {% if let Some(txt) = f.relasi_db_preview %}
+                <a href="#" class="link-modal ms-1" data-file="{{ f.id }}" data-kind="relasi_db">{{ txt }}</a>
+              {% else %}
+                <em>belum dianalisis</em>
+              {% endif %}
+            </div>
+          </div>
+        </td>
+        <td class="text-nowrap">
+          <a class="btn btn-sm btn-outline-primary" href="/analyze/{{ f.id }}/fungsi">Analisa Fungsi</a><br><br>
+          <a class="btn btn-sm btn-outline-dark" href="/analyze/{{ f.id }}/relasi_file">Relasi File</a><br><br>
+          <a class="btn btn-sm btn-outline-success" href="/analyze/{{ f.id }}/relasi_db">Relasi DB</a><br><br>
+          <a class="btn btn-sm btn-outline-secondary" href="/analyze/{{ f.id }}/fungsi/force">Analisa Ulang</a><br><br>
+
+          <button class="btn btn-sm btn-warning ms-1 btn-generate-graph" data-file="{{ f.id }}">Generate JSON</button><br><br>
+          {% if f.has_graph %}
+            <a class="btn btn-sm btn-info ms-1" href="/files/{{ f.id }}/graph">View Graph</a>
+          {% else %}
+            <a class="btn btn-sm btn-outline-info ms-1 disabled" href="#" tabindex="-1" aria-disabled="true">View Graph</a>
+          {% endif %}
+          <br><br>
         </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 {% endif %}
+
+<!-- Modal untuk full konten analisa -->
+<div class="modal fade" id="analysisModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="analysisModalLabel">Analisa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+      <div class="modal-body">
+        <div id="analysisModalBody" style="white-space: pre-wrap;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  document.addEventListener('click', async function(e){
+    const a = e.target.closest('.link-modal');
+    if (a) {
+      e.preventDefault();
+      const fileId = a.dataset.file;
+      const kind = a.dataset.kind;
+      const url = `/api/analysis/${fileId}/${kind}`;
+      try {
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!res.ok) {
+          let msg = `HTTP ${res.status}`;
+          try { const err = await res.json(); if (err && err.message) msg = err.message; } catch { try { msg = await res.text(); } catch {} }
+          throw new Error(msg);
+        }
+        const data = await res.json();
+
+        const Modal = window.bootstrap && window.bootstrap.Modal;
+        if (!Modal) throw new Error("Bootstrap JS belum dimuat");
+
+        document.getElementById('analysisModalLabel').textContent = data.title || 'Analisa';
+        document.getElementById('analysisModalBody').textContent = data.content || '(kosong)';
+        new Modal(document.getElementById('analysisModal')).show();
+      } catch (err) {
+        alert('Gagal memuat analisa: ' + (err?.message || 'unknown'));
+        console.error('API /api/analysis error:', err);
+      }
+    }
+
+    const btn = e.target.closest('.btn-generate-graph');
+    if (btn) {
+      e.preventDefault();
+      btn.disabled = true;
+      const originalText = btn.textContent;
+      btn.textContent = 'Generating...';
+      const fileId = btn.dataset.file;
+      try {
+        const res = await fetch(`/files/${fileId}/generate_graph`, { method: 'POST' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const tr = btn.closest('tr');
+        const viewBtn = tr.querySelector('a.btn-outline-info.disabled');
+        if (viewBtn) {
+          viewBtn.classList.remove('btn-outline-info','disabled');
+          viewBtn.classList.add('btn-info');
+          viewBtn.removeAttribute('aria-disabled');
+          viewBtn.removeAttribute('tabindex');
+          viewBtn.textContent = 'View Graph';
+          viewBtn.href = `/files/${fileId}/graph`;
+        }
+        btn.textContent = 'Generated';
+      } catch (err) {
+        alert('Gagal generate graph: ' + (err?.message || ''));
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+  });
+})();
+</script>
 {% endblock %}

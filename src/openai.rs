@@ -7,15 +7,14 @@ Email : kukuhtw@gmail.com
 WhatsApp : https://wa.me/628129893706
 LinkedIn : https://id.linkedin.com/in/kukuhtw
 =============================================================================/
-
 */
+
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde_json::json;
 
 async fn call_chatgpt(api_key: &str, prompt: &str) -> Result<String> {
     if api_key.is_empty() {
-        // biar errornya jelas kalau lupa set OPENAI_API_KEY
         anyhow::bail!("OPENAI_API_KEY kosong");
     }
 
@@ -37,7 +36,6 @@ async fn call_chatgpt(api_key: &str, prompt: &str) -> Result<String> {
         .await
         .context("gagal parsing JSON balasan OpenAI")?;
 
-    // aman-kan akses ke choices[0].message.content
     let content = resp
         .get("choices")
         .and_then(|c| c.as_array())
@@ -85,4 +83,59 @@ pub async fn summary_app(api: &str, payload: &str) -> Result<String> {
         ),
     )
     .await
+}
+
+// ======== BARU: generator JS untuk vis-network ========
+
+pub async fn generate_graph_js(api_key: &str, kode: &str) -> Result<String> {
+    let prompt = format!(
+        concat!(
+            "Jelaskan lengkap detail dan buat kode JavaScript (tanpa tag HTML, head, dan body) ",
+            "untuk menggambar diagram graph menggunakan vis-network.\n",
+            "Pada node, sebutkan semua actor yang terlibat.\n",
+            "Pada edges, sebutkan semua event dan atribut. Tambahkan arrow bila ada.\n",
+            "   var options = {{\n",
+            "       width: '100%',\n",
+            "       interaction: {{\n",
+            "           dragNodes: true,\n",
+            "           dragView: true,\n",
+            "           zoomView: true\n",
+            "       }},\n",
+            "       physics: false,\n",
+            "       edges: {{\n",
+            "           arrows: {{\n",
+            "               to: {{ enabled: true, scaleFactor: 1 }},\n",
+            "               from: {{ enabled: false }}\n",
+            "           }}\n",
+            "       }}\n",
+            "   }};\n\n",
+            "Berikan new line bila info lebih dari 2 kata.\n\n",
+            "Gunakan div dengan id `mynetwork` yang sudah ada di halaman.\n",
+            "Gunakan tag ```javascript untuk kode JavaScript.\n",
+            "Pastikan width=100%.\n\n",
+            "Basiskan diagram pada file berikut:\n{}"
+        ),
+        kode
+    );
+
+    let raw = call_chatgpt(api_key, &prompt).await?;
+    // UBAH: kirim &raw, lalu fallback ke raw (memindahkan raw) jika None
+    let js = extract_code_block(&raw).unwrap_or(raw);
+    Ok(js)
+    
+    
+}
+
+fn extract_code_block(s: &str) -> Option<String> {
+    let start_tag = "```javascript";
+    let alt_start = "```js";
+    let backticks = "```";
+
+    if let Some(start) = s.find(start_tag).or_else(|| s.find(alt_start)) {
+        let after = &s[start..];
+        let after = after.splitn(2, '\n').nth(1)?; // konten setelah baris pertama
+        let end_idx = after.find(backticks)?;
+        return Some(after[..end_idx].to_string());
+    }
+    None
 }

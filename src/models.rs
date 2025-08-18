@@ -7,8 +7,8 @@ Email : kukuhtw@gmail.com
 WhatsApp : https://wa.me/628129893706
 LinkedIn : https://id.linkedin.com/in/kukuhtw
 =============================================================================/
-
 */
+
 use askama::Template;
 use serde::Serialize;
 use chrono::{DateTime, Utc};
@@ -30,11 +30,28 @@ pub struct IndexPage<'a> {
 #[template(path="upload.html")]
 pub struct UploadPage;
 
+#[derive(Debug, Serialize)]
+pub struct FileWithAnalyses {
+    pub id: i64,
+    pub app_id: i64,
+    pub nama_file: String,
+    pub nama_folder: Option<String>,
+    pub full_path: String,
+    pub line_count: Option<i32>,
+
+    // ringkasan 50 kata (bisa None jika belum dianalisis)
+    pub fungsi_preview: Option<String>,
+    pub relasi_file_preview: Option<String>,
+    pub relasi_db_preview: Option<String>,
+
+    pub has_graph: bool,
+}
+
 #[derive(Template)]
 #[template(path="detail.html")]
 pub struct DetailPage<'a> {
     pub app: &'a AppRow,
-    pub files: &'a [FileRow],
+    pub files: &'a [FileWithAnalyses],
 }
 
 #[derive(Template)]
@@ -71,7 +88,7 @@ pub struct FileEntry {
     pub full_path: String,
 }
 
-// ===== Tambahan untuk halaman “Semua Analisa” =====
+// ===== Untuk halaman “Semua Analisa” =====
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct AnalysisJoinRow {
     pub file_id: i64,
@@ -87,4 +104,13 @@ pub struct AnalysisJoinRow {
 pub struct AnalysisAllPage<'a> {
     pub app: &'a AppRow,
     pub rows: &'a [AnalysisJoinRow],
+}
+
+// ===== Halaman graph =====
+#[derive(Template)]
+#[template(path="graph.html")]
+pub struct GraphPage<'a> {
+    pub app: &'a AppRow,
+    pub file_name: &'a str,
+   pub graph_js: &'a str,
 }
