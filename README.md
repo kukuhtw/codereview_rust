@@ -8,7 +8,8 @@
 > Perfect for onboarding, legacy audits, large refactors, and knowledge transfer.
 
 ---
-https://github.com/kukuhtw/codereview_rust/blob/main/Screenshot%202025-08-18%20131914.png
+![codereview_rust screenshot](./Screenshot%202025-08-18%20131914.png)
+
 
 ## 🎬 Demo
 
