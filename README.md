@@ -11,8 +11,14 @@
 
 ## 🎬 Demo
 
-Watch the quick demo on YouTube:
-**[https://www.youtube.com/watch?v=\_y08n-yFXY8](https://www.youtube.com/watch?v=_y08n-yFXY8)**
+Tonton demo di YouTube:
+
+- ▶️ **Demo 1** – walkthrough upload ZIP, analisis, dan visualisasi  
+  [https://www.youtube.com/watch?v=_y08n-yFXY8](https://www.youtube.com/watch?v=_y08n-yFXY8)
+
+- ▶️ **Demo 2** – versi singkat  
+  [https://youtu.be/QiKAjsS4ifA](https://youtu.be/QiKAjsS4ifA)
+
 
 ---
 
