@@ -1,18 +1,6 @@
 // src/handlers.rs
-
-/*
-=============================================================================
-Project : AI CodeReview Rust
-Author : Kukuh Tripamungkas Wicaksono (Kukuh TW)
-Email : kukuhtw@gmail.com
-WhatsApp : https://wa.me/628129893706
-LinkedIn : https://id.linkedin.com/in/kukuhtw
-=============================================================================/
-*/
-
-use askama::Template;   
 use futures_util::TryStreamExt;
-use warp::{Reply, Rejection};
+use warp::Reply;
 use warp::multipart::FormData;
 use warp::Buf;
 use sqlx::MySqlPool;
@@ -20,11 +8,25 @@ use std::io::Write;
 use warp::http::StatusCode;
 use serde_json::json;
 use chrono::Utc;
+use askama::Template; // for render()
+use serde::Deserialize;   
 
 use crate::models::{
     IndexPage, UploadPage, DetailPage, AnalysisPage, AnalysisAllPage,
     AppRow, AnalysisJoinRow, FileWithAnalyses,
 };
+
+// Semua handler konsisten mengembalikan Response<Body>
+pub type HandlerResult = Result<warp::reply::Response, warp::Rejection>;
+
+
+const PER_PAGE: i64 = 25;
+
+#[derive(Deserialize)]
+pub struct PageQ {
+    pub page: Option<usize>,
+    pub q: Option<String>,   // ⟵ TAMBAH INI
+}
 
 fn truncate_words(s: &str, max_words: usize) -> String {
     let mut out = String::new();
@@ -41,12 +43,59 @@ fn truncate_words(s: &str, max_words: usize) -> String {
     out
 }
 
-pub async fn upload_page() -> Result<impl Reply, Rejection> {
-    let page = UploadPage;
-    Ok(warp::reply::html(page.render().unwrap()))
+pub async fn api_get_app_summary_full(app_id: i32, pool: MySqlPool) -> HandlerResult {
+    match sqlx::query!("SELECT summary FROM app_summary WHERE app_id=?", app_id)
+        .fetch_optional(&pool).await
+    {
+        Ok(Some(row)) => {
+            let full = row.summary.unwrap_or_default();
+            let body = json!({ "title": "Ringkasan Aplikasi", "content": full });
+            Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::OK).into_response())
+        }
+        Ok(None) => {
+            let body = json!({
+                "error": "no_summary",
+                "message": "Belum ada summary. Klik 'Summary' atau 'Summary Ulang' untuk membuatnya."
+            });
+            Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::NOT_FOUND).into_response())
+        }
+        Err(e) => {
+            let body = json!({ "error": "db_error", "message": e.to_string() });
+            Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::INTERNAL_SERVER_ERROR).into_response())
+        }
+    }
 }
 
-pub async fn upload_zip(form: FormData, pool: MySqlPool) -> Result<impl Reply, Rejection> {
+pub async fn api_get_app_summary_preview(app_id: i32, pool: MySqlPool) -> HandlerResult {
+    match sqlx::query!("SELECT summary FROM app_summary WHERE app_id=?", app_id)
+        .fetch_optional(&pool).await
+    {
+        Ok(Some(row)) => {
+            let full = row.summary.unwrap_or_default();
+            let short = truncate_words(&full, 50);
+            let body = json!({ "title": "Ringkasan Aplikasi", "content": short });
+            Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::OK).into_response())
+        }
+        Ok(None) => {
+            let body = json!({
+                "error": "no_summary",
+                "message": "Belum ada summary. Klik 'Summary' atau 'Summary Ulang' untuk menghasilkan ringkasan."
+            });
+            Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::NOT_FOUND).into_response())
+        }
+        Err(e) => {
+            let body = json!({ "error": "db_error", "message": e.to_string() });
+            Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::INTERNAL_SERVER_ERROR).into_response())
+        }
+    }
+}
+
+pub async fn upload_page() -> HandlerResult {
+    let page = UploadPage;
+    Ok(askama_warp::reply(&page, "html"))
+}
+
+pub async fn upload_zip(form: FormData, pool: MySqlPool) -> HandlerResult {
     let mut app_name = "MyApp".to_string();
     let mut zip_path: Option<String> = None;
 
@@ -83,31 +132,58 @@ pub async fn upload_zip(form: FormData, pool: MySqlPool) -> Result<impl Reply, R
         .await
         .map_err(|_| warp::reject())?;
 
+    // Bangun Response<Body> untuk redirect
     let res = warp::http::Response::builder()
-        .status(302)
+        .status(StatusCode::FOUND)
         .header("Location", format!("/apps/{app_id}"))
-        .body("Uploaded")
+        .body(warp::hyper::Body::empty())
         .unwrap();
+
     Ok(res)
 }
 
-pub async fn list_apps(pool: MySqlPool) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn list_apps(pool: MySqlPool) -> HandlerResult {
     match sqlx::query_as::<_, AppRow>(
         "SELECT id, nama_aplikasi, created_at FROM applications ORDER BY id DESC"
     ).fetch_all(&pool).await {
         Ok(rows) => {
-            let page = IndexPage { apps: &rows };
-            Ok(warp::reply::html(page.render().unwrap()))
+            let json_data = match serde_json::to_string(&rows) {
+                Ok(json) => json,
+                Err(_) => "[]".to_string(),
+            };
+
+            let page = IndexPage {
+                apps: &rows,
+                json: json_data,
+            };
+            Ok(askama_warp::reply(&page, "html"))
         }
         Err(e) => {
-            let html = format!("<h3>DB error</h3><pre>{e}</pre>\
-                                <p>Cek DATABASE_URL / DB & tabel.</p>");
-            Ok(warp::reply::html(html))
+            let html = format!(
+                "<h3>DB error</h3><pre>{e}</pre><p>Cek DATABASE_URL / DB & tabel.</p>"
+            );
+            Ok(warp::reply::html(html).into_response())
         }
     }
 }
 
-pub async fn app_detail(app_id: i32, pool: MySqlPool) -> Result<impl Reply, Rejection> {
+
+#[derive(sqlx::FromRow)]
+struct FileJoinRow {
+    id: i64,
+    app_id: i64,
+    nama_file: String,
+    nama_folder: Option<String>,
+    full_path: String,
+    json_graph: Option<String>,
+    line_count: Option<i32>,
+    analisa_fungsi: Option<String>,
+    analisa_relasi_file: Option<String>,
+    analisa_relasi_db: Option<String>,
+}
+
+// UBAH tanda tangan: terima query page
+pub async fn app_detail(app_id: i32, q: PageQ, pool: MySqlPool) -> HandlerResult {
     let app: Option<AppRow> = sqlx::query_as(
         "SELECT id, nama_aplikasi, created_at FROM applications WHERE id=?",
     )
@@ -118,30 +194,87 @@ pub async fn app_detail(app_id: i32, pool: MySqlPool) -> Result<impl Reply, Reje
 
     let Some(app) = app else {
         let html = format!("Aplikasi dengan id {} tidak ditemukan.", app_id);
-        return Ok(warp::reply::with_status(
-            warp::reply::html(html),
-            StatusCode::NOT_FOUND,
-        ));
+        return Ok(
+            warp::reply::with_status(warp::reply::html(html), StatusCode::NOT_FOUND)
+                .into_response()
+        );
     };
 
-    // files + metadata + analysis + json_graph
-    let rows = sqlx::query!(
-        r#"
-        SELECT
-            f.id, f.app_id, f.nama_file, f.nama_folder, f.full_path, f.json_graph,
-            m.line_count,
-            a.analisa_fungsi, a.analisa_relasi_file, a.analisa_relasi_db
-        FROM files f
-        LEFT JOIN file_metadata m ON m.file_id = f.id
-        LEFT JOIN analysis a ON a.file_id = f.id
-        WHERE f.app_id = ?
-        ORDER BY f.id
-        "#,
-        app_id
-    ).fetch_all(&pool).await.map_err(|_| warp::reject())?;
+    // Total items (dengan/ tanpa pencarian)
+    let (total_items, like) = if let Some(ref s) = q.q {
+        let like = format!("%{}%", s);
+        let cnt: i64 = sqlx::query_scalar(
+            r#"SELECT COUNT(*) FROM files
+               WHERE app_id=? AND (
+                    nama_file LIKE ? OR COALESCE(nama_folder,'') LIKE ? OR full_path LIKE ?
+               )"#,
+        )
+        .bind(app_id)
+        .bind(&like)
+        .bind(&like)
+        .bind(&like)
+        .fetch_one(&pool).await
+        .map_err(|_| warp::reject())?;
+        (cnt, Some(like))
+    } else {
+        let cnt: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM files WHERE app_id=?")
+            .bind(app_id)
+            .fetch_one(&pool).await
+            .map_err(|_| warp::reject())?;
+        (cnt, None)
+    };
 
+    // Paging
+    let total_pages = std::cmp::max(1_i64, (total_items + PER_PAGE - 1) / PER_PAGE) as usize;
+    let mut page = q.page.unwrap_or(1);
+    if page == 0 { page = 1; }
+    if page > total_pages { page = total_pages; }
+    let offset = ((page as i64 - 1) * PER_PAGE).max(0);
+
+    // Ambil rows sesuai filter + paging (pakai query_as supaya tipe sama di kedua cabang)
+    let rows: Vec<FileJoinRow> = if let Some(ref like) = like {
+        sqlx::query_as::<_, FileJoinRow>(
+            r#"
+            SELECT
+                f.id, f.app_id, f.nama_file, f.nama_folder, f.full_path, f.json_graph,
+                m.line_count,
+                a.analisa_fungsi, a.analisa_relasi_file, a.analisa_relasi_db
+            FROM files f
+            LEFT JOIN file_metadata m ON m.file_id = f.id
+            LEFT JOIN analysis a ON a.file_id = f.id
+            WHERE f.app_id = ?
+              AND (f.nama_file LIKE ? OR COALESCE(f.nama_folder,'') LIKE ? OR f.full_path LIKE ?)
+            ORDER BY f.id
+            LIMIT ? OFFSET ?
+            "#,
+        )
+        .bind(app_id)
+        .bind(like).bind(like).bind(like)
+        .bind(PER_PAGE).bind(offset)
+        .fetch_all(&pool).await.map_err(|_| warp::reject())?
+    } else {
+        sqlx::query_as::<_, FileJoinRow>(
+            r#"
+            SELECT
+                f.id, f.app_id, f.nama_file, f.nama_folder, f.full_path, f.json_graph,
+                m.line_count,
+                a.analisa_fungsi, a.analisa_relasi_file, a.analisa_relasi_db
+            FROM files f
+            LEFT JOIN file_metadata m ON m.file_id = f.id
+            LEFT JOIN analysis a ON a.file_id = f.id
+            WHERE f.app_id = ?
+            ORDER BY f.id
+            LIMIT ? OFFSET ?
+            "#,
+        )
+        .bind(app_id)
+        .bind(PER_PAGE).bind(offset)
+        .fetch_all(&pool).await.map_err(|_| warp::reject())?
+    }; // ⟵ TUTUP ekspresi if/else dengan `};`
+
+    // Susun vec + nomor urut global
     let mut files: Vec<FileWithAnalyses> = Vec::with_capacity(rows.len());
-    for r in rows {
+    for (i, r) in rows.into_iter().enumerate() {
         let fungsi_preview = r.analisa_fungsi.as_deref().map(|s| truncate_words(s, 50));
         let relasi_file_preview = r.analisa_relasi_file.as_deref().map(|s| truncate_words(s, 50));
         let relasi_db_preview = r.analisa_relasi_db.as_deref().map(|s| truncate_words(s, 50));
@@ -157,15 +290,51 @@ pub async fn app_detail(app_id: i32, pool: MySqlPool) -> Result<impl Reply, Reje
             relasi_file_preview,
             relasi_db_preview,
             has_graph: r.json_graph.as_deref().map(|s| !s.trim().is_empty()).unwrap_or(false),
+            row_no: Some(offset + i as i64 + 1),
         });
     }
 
-    let page = DetailPage { app: &app, files: &files };
-    let html = page.render().map_err(|_| warp::reject())?;
-    Ok(warp::reply::with_status(warp::reply::html(html), StatusCode::OK))
+    // Build pagination object
+    let last = total_pages;
+    let prev = if page > 1 { Some(page - 1) } else { None };
+    let next = if page < last { Some(page + 1) } else { None };
+    let p_minus1 = if page > 1 { Some(page - 1) } else { None };
+    let p_minus2 = if page > 2 { Some(page - 2) } else { None };
+    let p_plus1  = if page + 1 <= last { Some(page + 1) } else { None };
+    let p_plus2  = if page + 2 <= last { Some(page + 2) } else { None };
+
+    let shown = files.len() as i64;
+    let from  = if total_items == 0 { 0 } else { offset + 1 };
+    let to    = if total_items == 0 { 0 } else { (offset + shown).min(total_items) };
+
+    let pagination = crate::models::Pagination {
+        page,
+        per_page: PER_PAGE as usize,
+        total_pages: last,
+        total_items,
+        first: 1,
+        last,
+        prev,
+        next,
+        p_minus2,
+        p_minus1,
+        p_plus1,
+        p_plus2,
+        from,
+        to,
+    };
+
+    let page_tmpl = DetailPage {
+        app: &app,
+        files: &files,
+        pagination,
+        search: q.q.clone(),
+    };
+    Ok(askama_warp::reply(&page_tmpl, "html"))
 }
 
-pub async fn app_summary(app_id: i32, pool: MySqlPool, force: bool) -> Result<impl Reply, Rejection> {
+
+pub async fn app_summary(app_id: i32, pool: MySqlPool, force: bool) -> HandlerResult {
     if !force {
         if let Some(row) = sqlx::query!("SELECT summary FROM app_summary WHERE app_id=?", app_id)
             .fetch_optional(&pool).await.map_err(|_| warp::reject())?
@@ -177,7 +346,7 @@ pub async fn app_summary(app_id: i32, pool: MySqlPool, force: bool) -> Result<im
                     back_href: "/apps",
                     force_href: Some(&format!("/apps/{}/summary/force", app_id)),
                 };
-                return Ok(warp::reply::html(page.render().unwrap()));
+                return Ok(askama_warp::reply(&page, "html"));
             }
         }
     }
@@ -218,8 +387,9 @@ pub async fn app_summary(app_id: i32, pool: MySqlPool, force: bool) -> Result<im
     }
 
     let api_key = std::env::var("OPENAI_API_KEY").unwrap_or_default();
-    let summary =
-        crate::openai::summary_app(&api_key, &payload).await.map_err(|_| warp::reject())?;
+    let summary = crate::openai::summary_app(&api_key, &payload)
+        .await
+        .map_err(|_| warp::reject())?;
 
     sqlx::query(
         "INSERT INTO app_summary (app_id, summary) VALUES (?, ?)
@@ -237,10 +407,10 @@ pub async fn app_summary(app_id: i32, pool: MySqlPool, force: bool) -> Result<im
         back_href: "/apps",
         force_href: Some(&format!("/apps/{}/summary/force", app_id)),
     };
-    Ok(warp::reply::html(page.render().unwrap()))
+    Ok(askama_warp::reply(&page, "html"))
 }
 
-pub async fn app_analysis_all(app_id: i32, pool: MySqlPool) -> Result<impl Reply, Rejection> {
+pub async fn app_analysis_all(app_id: i32, pool: MySqlPool) -> HandlerResult {
     let app: Option<AppRow> = sqlx::query_as(
         "SELECT id, nama_aplikasi, created_at FROM applications WHERE id=?",
     )
@@ -251,10 +421,10 @@ pub async fn app_analysis_all(app_id: i32, pool: MySqlPool) -> Result<impl Reply
 
     let Some(app) = app else {
         let html = format!("Aplikasi dengan id {} tidak ditemukan.", app_id);
-        return Ok(warp::reply::with_status(
-            warp::reply::html(html),
-            StatusCode::NOT_FOUND,
-        ));
+        return Ok(
+            warp::reply::with_status(warp::reply::html(html), StatusCode::NOT_FOUND)
+                .into_response()
+        );
     };
 
     let rows: Vec<AnalysisJoinRow> = sqlx::query_as(
@@ -278,14 +448,11 @@ pub async fn app_analysis_all(app_id: i32, pool: MySqlPool) -> Result<impl Reply
     .map_err(|_| warp::reject())?;
 
     let page = AnalysisAllPage { app: &app, rows: &rows };
-    let html = page.render().map_err(|_| warp::reject())?;
-    Ok(warp::reply::with_status(warp::reply::html(html), StatusCode::OK))
+    Ok(askama_warp::reply(&page, "html"))
 }
 
 // ====== API untuk modal: ambil full konten analisa ======
-pub async fn api_get_analysis(file_id: i32, kind: String, pool: MySqlPool)
-    -> Result<impl Reply, Rejection>
-{
+pub async fn api_get_analysis(file_id: i32, kind: String, pool: MySqlPool) -> HandlerResult {
     let row = match sqlx::query!(
         "SELECT analisa_fungsi, analisa_relasi_file, analisa_relasi_db FROM analysis WHERE file_id=?",
         file_id
@@ -293,9 +460,10 @@ pub async fn api_get_analysis(file_id: i32, kind: String, pool: MySqlPool)
         Ok(r) => r,
         Err(e) => {
             let body = json!({"error":"db_error", "message": e.to_string()});
-            return Ok(warp::reply::with_status(
-                warp::reply::json(&body), StatusCode::INTERNAL_SERVER_ERROR
-            ));
+            return Ok(
+                warp::reply::with_status(warp::reply::json(&body), StatusCode::INTERNAL_SERVER_ERROR)
+                    .into_response()
+            );
         }
     };
 
@@ -311,11 +479,11 @@ pub async fn api_get_analysis(file_id: i32, kind: String, pool: MySqlPool)
     };
 
     let body = json!({ "title": title, "content": content });
-    Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::OK))
+    Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::OK).into_response())
 }
 
 // ====== Generate graph JS via GPT dan simpan ke files.json_graph ======
-pub async fn generate_graph(file_id: i32, pool: MySqlPool) -> Result<impl Reply, Rejection> {
+pub async fn generate_graph(file_id: i32, pool: MySqlPool) -> HandlerResult {
     let row = sqlx::query!(
         "SELECT full_path, content_file FROM files WHERE id=?",
         file_id
@@ -336,11 +504,11 @@ pub async fn generate_graph(file_id: i32, pool: MySqlPool) -> Result<impl Reply,
         .map_err(|_| warp::reject())?;
 
     let body = json!({ "ok": true });
-    Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::OK))
+    Ok(warp::reply::with_status(warp::reply::json(&body), StatusCode::OK).into_response())
 }
 
 // ====== Render graph ======
-pub async fn view_graph(file_id: i32, pool: MySqlPool) -> Result<impl Reply, Rejection> {
+pub async fn view_graph(file_id: i32, pool: MySqlPool) -> HandlerResult {
     let row = sqlx::query!(
         r#"
         SELECT f.nama_file, f.json_graph, a.id as app_id, a.nama_aplikasi, a.created_at
@@ -355,10 +523,12 @@ pub async fn view_graph(file_id: i32, pool: MySqlPool) -> Result<impl Reply, Rej
     .map_err(|_| warp::reject())?;
 
     let Some(r) = row else {
-        return Ok(warp::reply::with_status(
-            warp::reply::html("File tidak ditemukan".to_string()),
-            StatusCode::NOT_FOUND,
-        ));
+        return Ok(
+            warp::reply::with_status(
+                warp::reply::html("File tidak ditemukan".to_string()),
+                StatusCode::NOT_FOUND,
+            ).into_response()
+        );
     };
 
     let app = crate::models::AppRow {
@@ -370,27 +540,27 @@ pub async fn view_graph(file_id: i32, pool: MySqlPool) -> Result<impl Reply, Rej
     let js = r.json_graph.unwrap_or_default();
     if js.trim().is_empty() {
         let html = "<div class='container p-3'><a href='javascript:history.back()'>&larr; Kembali</a><h4>Belum ada graph</h4><p>Silakan klik <em>Generate JSON</em> terlebih dahulu.</p></div>";
-        return Ok(warp::reply::with_status(
-            warp::reply::html(html.to_string()),
-            StatusCode::OK,
-        ));
+        return Ok(
+            warp::reply::with_status(warp::reply::html(html.to_string()), StatusCode::OK)
+                .into_response()
+        );
     }
 
     let page = crate::models::GraphPage {
-    app: &app,
-    file_name: &r.nama_file,
-    graph_js: &js,
-};
+        app: &app,
+        file_name: &r.nama_file,
+        graph_js: &js,
+    };
 
-    let html = page.render().map_err(|_| warp::reject())?;
-    Ok(warp::reply::with_status(warp::reply::html(html), StatusCode::OK))
+    Ok(askama_warp::reply(&page, "html"))
 }
+
 pub async fn analyze_file(
     file_id: i32,
     kind: String,
     pool: MySqlPool,
     force: bool,
-) -> Result<impl Reply, Rejection> {
+) -> HandlerResult {
     let (app_id,): (i64,) = sqlx::query_as("SELECT app_id FROM files WHERE id=?")
         .bind(file_id)
         .fetch_one(&pool)
@@ -420,7 +590,7 @@ pub async fn analyze_file(
                     back_href: &back_link,
                     force_href: Some(&format!("/analyze/{}/{}/force", file_id, kind)),
                 };
-                return Ok(warp::reply::html(page.render().unwrap()));
+                return Ok(warp::reply::html(page.render().unwrap()).into_response());
             }
         }
     }
@@ -474,5 +644,5 @@ pub async fn analyze_file(
         back_href: &back_link,
         force_href: Some(&format!("/analyze/{}/{}/force", file_id, kind)),
     };
-    Ok(warp::reply::html(page.render().unwrap()))
+    Ok(warp::reply::html(page.render().unwrap()).into_response())
 }

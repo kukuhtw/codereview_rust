@@ -1,14 +1,4 @@
 // src/models.rs
-/*
-=============================================================================
-Project : AI CodeReview Rust
-Author : Kukuh Tripamungkas Wicaksono (Kukuh TW)
-Email : kukuhtw@gmail.com
-WhatsApp : https://wa.me/628129893706
-LinkedIn : https://id.linkedin.com/in/kukuhtw
-=============================================================================/
-*/
-
 use askama::Template;
 use serde::Serialize;
 use chrono::{DateTime, Utc};
@@ -24,6 +14,7 @@ pub struct AppRow {
 #[template(path="index.html")]
 pub struct IndexPage<'a> {
     pub apps: &'a [AppRow],
+    pub json: String,
 }
 
 #[derive(Template)]
@@ -38,13 +29,28 @@ pub struct FileWithAnalyses {
     pub nama_folder: Option<String>,
     pub full_path: String,
     pub line_count: Option<i32>,
-
-    // ringkasan 50 kata (bisa None jika belum dianalisis)
     pub fungsi_preview: Option<String>,
     pub relasi_file_preview: Option<String>,
     pub relasi_db_preview: Option<String>,
-
     pub has_graph: bool,
+     pub row_no: Option<i64>,
+}
+
+pub struct Pagination {
+    pub page: usize,
+    pub per_page: usize,
+    pub total_pages: usize,
+    pub total_items: i64,
+    pub first: usize,
+    pub last: usize,
+    pub prev: Option<usize>,
+    pub next: Option<usize>,
+    pub p_minus2: Option<usize>,
+    pub p_minus1: Option<usize>,
+    pub p_plus1: Option<usize>,
+    pub p_plus2: Option<usize>,
+    pub from: i64, // index awal di halaman ini (1-based)
+    pub to: i64,   // index akhir di halaman ini
 }
 
 #[derive(Template)]
@@ -52,11 +58,13 @@ pub struct FileWithAnalyses {
 pub struct DetailPage<'a> {
     pub app: &'a AppRow,
     pub files: &'a [FileWithAnalyses],
+    pub pagination: Pagination, // ⟵ BARU
+    pub search: Option<String>,
 }
 
 #[derive(Template)]
 #[template(path="analysis.html")]
-pub struct AnalysisPage<'a> {
+pub struct AnalysisPage <'a> {
     pub title: &'a str,
     pub content: &'a str,
     pub back_href: &'a str,
@@ -88,7 +96,6 @@ pub struct FileEntry {
     pub full_path: String,
 }
 
-// ===== Untuk halaman “Semua Analisa” =====
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct AnalysisJoinRow {
     pub file_id: i64,
@@ -106,11 +113,10 @@ pub struct AnalysisAllPage<'a> {
     pub rows: &'a [AnalysisJoinRow],
 }
 
-// ===== Halaman graph =====
 #[derive(Template)]
 #[template(path="graph.html")]
 pub struct GraphPage<'a> {
     pub app: &'a AppRow,
     pub file_name: &'a str,
-   pub graph_js: &'a str,
+    pub graph_js: &'a str,
 }

@@ -1,0 +1,47 @@
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <div class="small text-muted">
+    Menampilkan {{ pagination.from }}–{{ pagination.to }} dari {{ pagination.total_items }} file
+    {% if let Some(s) = search %}
+      <span class="ms-2 badge text-bg-light">filter: “{{ s }}”</span>
+    {% endif %}
+  </div>
+  <ul class="pagination pagination-sm mb-0">
+
+    <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
+      <a class="page-link" href="/apps/{{ app.id }}?page=1{% if let Some(s) = search %}&q={{ s }}{% endif %}">First</a>
+    </li>
+
+    <li class="page-item {% if pagination.prev.is_some() %}{% else %}disabled{% endif %}">
+      {% if let Some(pp) = pagination.prev %}
+        <a class="page-link" href="/apps/{{ app.id }}?page={{ pp }}{% if let Some(s) = search %}&q={{ s }}{% endif %}">Prev</a>
+      {% else %}<span class="page-link">Prev</span>{% endif %}
+    </li>
+
+    {% if let Some(pp) = pagination.p_minus2 %}
+      <li class="page-item"><a class="page-link" href="/apps/{{ app.id }}?page={{ pp }}{% if let Some(s) = search %}&q={{ s }}{% endif %}">{{ pp }}</a></li>
+    {% endif %}
+    {% if let Some(pp) = pagination.p_minus1 %}
+      <li class="page-item"><a class="page-link" href="/apps/{{ app.id }}?page={{ pp }}{% if let Some(s) = search %}&q={{ s }}{% endif %}">{{ pp }}</a></li>
+    {% endif %}
+
+    <li class="page-item active"><span class="page-link">{{ pagination.page }}</span></li>
+
+    {% if let Some(pp) = pagination.p_plus1 %}
+      <li class="page-item"><a class="page-link" href="/apps/{{ app.id }}?page={{ pp }}{% if let Some(s) = search %}&q={{ s }}{% endif %}">{{ pp }}</a></li>
+    {% endif %}
+    {% if let Some(pp) = pagination.p_plus2 %}
+      <li class="page-item"><a class="page-link" href="/apps/{{ app.id }}?page={{ pp }}{% if let Some(s) = search %}&q={{ s }}{% endif %}">{{ pp }}</a></li>
+    {% endif %}
+
+    <li class="page-item {% if pagination.next.is_some() %}{% else %}disabled{% endif %}">
+      {% if let Some(nn) = pagination.next %}
+        <a class="page-link" href="/apps/{{ app.id }}?page={{ nn }}{% if let Some(s) = search %}&q={{ s }}{% endif %}">Next</a>
+      {% else %}<span class="page-link">Next</span>{% endif %}
+    </li>
+
+    <li class="page-item {% if pagination.page == pagination.last %}disabled{% endif %}">
+      <a class="page-link" href="/apps/{{ app.id }}?page={{ pagination.last }}{% if let Some(s) = search %}&q={{ s }}{% endif %}">Last</a>
+    </li>
+
+  </ul>
+</div>

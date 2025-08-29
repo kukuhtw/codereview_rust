@@ -1,5 +1,8 @@
+<!-- detail.html -->
 {% extends "base.html" %}
 {% block title %}Detail Aplikasi{% endblock %}
+
+
 {% block content %}
 <h3>Detail Aplikasi: {{ app.nama_aplikasi }}</h3>
 
@@ -7,10 +10,31 @@
   <a href="/apps">← Kembali</a>
   <a class="btn btn-sm btn-primary" href="/apps/{{ app.id }}/analysis">Lihat Semua Analisa</a>
 </div>
+{# Form Search #}
+<form class="row g-2 mb-3" method="get" action="/apps/{{ app.id }}">
+  <div class="col-auto">
+    <input name="q" class="form-control form-control-sm" placeholder="Cari nama file / folder / path"
+      {% if let Some(s) = search %} value="{{ s }}" {% endif %} />
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-sm btn-primary">Search</button>
+  </div>
+  {% if search.is_some() %}
+  <div class="col-auto">
+    <a class="btn btn-sm btn-outline-secondary" href="/apps/{{ app.id }}">Clear</a>
+  </div>
+  {% endif %}
+  {# Saat submit search, page akan mulai dari 1 (tidak perlu field page). #}
+</form>
+
+
 
 {% if files.is_empty() %}
   <div class="alert alert-warning">Tidak ada file terdata.</div>
 {% else %}
+
+    {% include "_pager.html" %}
+
   <div class="alert alert-info">
     Klik ringkasan untuk melihat konten lengkap di modal. Gunakan tombol “Generate JSON” untuk membuat diagram graph (vis-network) dan “View Graph” untuk melihatnya.
   </div>
@@ -27,6 +51,7 @@
     </thead>
     <tbody>
     {% for f in files %}
+      {# ... baris yang sudah ada ... #}
       <tr>
         <td class="fw-semibold">{{ f.nama_file }}</td>
         <td>
@@ -85,8 +110,11 @@
     {% endfor %}
     </tbody>
   </table>
-{% endif %}
 
+  
+  {% include "_pager.html" %}
+
+{% endif %}
 <!-- Modal untuk full konten analisa -->
 <div class="modal fade" id="analysisModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">

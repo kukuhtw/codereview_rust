@@ -1,12 +1,28 @@
 // src/main.rs
 /*
-=============================================================================
-Project : AI CodeReview Rust
-Author : Kukuh Tripamungkas Wicaksono (Kukuh TW)
-Email : kukuhtw@gmail.com
-WhatsApp : https://wa.me/628129893706
-LinkedIn : https://id.linkedin.com/in/kukuhtw
-=============================================================================/
+cd /rust/codereview
+cargo clean
+cargo build
+cargo run
+
+/rust/codereview/cargo clean
+
+/rust/codereview/cargo build
+
+*/
+// src/main.rs
+/*
+cd /rust/codereview
+cargo clean
+cargo build
+cargo run
+*/
+// src/main.rs
+/*
+cd /rust/codereview
+cargo clean
+cargo build
+
 */
 
 mod db;
@@ -17,6 +33,7 @@ mod models;
 
 use std::convert::Infallible;
 use warp::{http::StatusCode, Filter, Rejection, Reply};
+use std::collections::HashMap; // ⟵ TAMBAH
 
 #[tokio::main]
 async fn main() {
@@ -58,11 +75,18 @@ async fn main() {
         .and(with_db(pool.clone()))
         .and_then(handlers::list_apps);
 
-    // GET /apps/:id
-    let app_detail = warp::path!("apps" / i32)
-        .and(warp::get())
-        .and(with_db(pool.clone()))
-        .and_then(handlers::app_detail);
+  let app_detail = warp::path!("apps" / i32)
+    .and(warp::get())
+    .and(warp::query::<HashMap<String, String>>())
+    .and(with_db(pool.clone()))
+    .and_then(|id, qs: HashMap<String,String>, pool| {
+        let page = qs.get("page").and_then(|v| v.parse::<usize>().ok());
+        let q = qs.get("q").cloned();
+        let qobj = handlers::PageQ { page, q };
+        handlers::app_detail(id, qobj, pool)
+    });
+
+
 
     // GET /analyze/:file_id/:kind
     let analyze = warp::path!("analyze" / i32 / String)
@@ -118,7 +142,17 @@ async fn main() {
         .and(with_db(pool.clone()))
         .and_then(handlers::view_graph);
 
-   
+   // GET /api/apps/:id/summary_preview  ← ringkasan 50 kata untuk modal
+let api_app_summary_preview = warp::path!("api" / "apps" / i32 / "summary_preview")
+    .and(warp::get())
+    .and(with_db(pool.clone()))
+    .and_then(handlers::api_get_app_summary_preview);
+
+// GET /api/apps/:id/summary  ← konten utuh untuk modal
+let api_app_summary_full = warp::path!("api" / "apps" / i32 / "summary")
+    .and(warp::get())
+    .and(with_db(pool.clone()))
+    .and_then(handlers::api_get_app_summary_full);
 
 
     // SATU-SATUNYA komposisi routes
@@ -137,6 +171,8 @@ async fn main() {
         .or(analyze_force)
         .or(summary)
         .or(summary_force)
+        .or(api_app_summary_full)   // ⟵ tambah ini
+        .or(api_app_summary_preview)   // ⟵ tambahkan ini
         .recover(handle_rejection)
         .with(warp::log("code_review_ssr"));
 
